@@ -14,6 +14,7 @@ import importlib
 
 NUM_ROUNDS = 10
 STARTING_BUDGET = 1000
+CARDS_PER_AGENT = 10
 
 #scoring constants
 DOMINATE_POINTS = 1
@@ -170,28 +171,30 @@ def main():
     UI.on_agents_discovered([x.__name__ for x in agent_classes])
     num_agents = len(agent_classes)
     
+    for rnd in range(NUM_ROUNDS):
+        
+        #set up round
+        cards = generate_cards(num_agents*CARDS_PER_AGENT, rnd)
+        UI.on_round_started(rnd, cards)
+        
+        agents = make_bidding_agents(agent_classes, cards, STARTING_BUDGET);
+        budgets = [STARTING_BUDGET for agent in agents]
+        cards_won = {}
+        
+        #do bidding
+        for i in range(len(cards)):
+            bids = get_bids(cards[i], i, agents, budgets, UI)
+            winner = give_results(bids, agents, cards[i], budgets, UI)
+            if winner in cards_won:
+                cards_won[winner].append(cards[i])
+            else:
+                cards_won[winner] = [cards[i]]
+        
+        
+        #do scoring
+        calculate_scores(cards_won, num_agents, UI)
     
-    #set up round
-    cards = generate_cards(num_agents*10, 0)   #this is arbitrary 
-    agents = make_bidding_agents(agent_classes, cards, STARTING_BUDGET);
-    budgets = [STARTING_BUDGET for agent in agents]
-    cards_won = {}
-    score = [0]*len(agents)
-    
-    #do bidding
-    for i in range(len(cards)):
-        bids = get_bids(cards[i], i, agents, budgets, UI)
-        winner = give_results(bids, agents, cards[i], budgets, UI)
-        if winner in cards_won:
-            cards_won[winner].append(cards[i])
-        else:
-            cards_won[winner] = [cards[i]]
-    
-    
-    #do scoring
-    scores = calculate_scores(cards_won, num_agents, UI)
-    
-            
+    UI.on_game_finished()
     
 
 if __name__ == '__main__':
