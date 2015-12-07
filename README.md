@@ -22,5 +22,13 @@ the following parts:
 
 5. agents folder -- this folder is where any agents should be placed. The auction simulator
     uses any class it finds in this folder that is a subclass of BiddingAgent. Note that the
-    empty file __init__.py must be left in this folder for the auction simulator to work
-    properly (because of how python modules work).
+    empty file \__init__.py must be left in this folder for the auction simulator to work
+    properly (because of how python modules work).\
+    
+    This folder currently contains 5 test agents:
+..* RandomAgent and RandomAgent2 which bid a random amount of their remaining budget.
+..* CopycatAgent which bids whatever the last price paid was.
+..* ProportionalAgent which bids based on how valuble the cards stats are as a proportion
+        of the total stats form all the cards.
+..* BetterAgent which is the same as proportional agent, except it only cares about the
+        first 3 stats on each card.
