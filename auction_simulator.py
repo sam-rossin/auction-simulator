@@ -10,8 +10,10 @@ import string
 import os
 import inspect
 import importlib
+import signal
+from contextlib import contextmanager
 
-
+#game constants
 NUM_ROUNDS = 10
 STARTING_BUDGET = 1000
 CARDS_PER_AGENT = 10
@@ -23,9 +25,25 @@ HIGHEST_POINTS = 1
 #this is useful for printing stuff
 CATAGORIES = ["Science", "Ecology", "Culture", "Commerce", "Industry"]
 
+#timeout exception: an exception for the purpose of cutting functions off
+#if they run too long
+class TimeoutException(Exception): pass
 
+#signal handler to handle sigalrm
+def signal_handler(signum, frame):
+    raise TimeoutException()
 
-
+#fucntion to use to limit the time of other functions
+#must be used in a with clause
+@contextmanager
+def time_limit(seconds, agent_id, function):
+    signal.setitimer(signal.ITIMER_REAL, seconds)
+    try:
+        yield
+    except TimeoutException:
+        UI.on_function_timed_out(agent_id, function)
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
 
 #finds all classes in the given directory that are subclasses
 #of BiddingAgent
@@ -48,9 +66,10 @@ def get_agent_classes(directory = "agents"):
 #params: a list of classes, a list of cards, and a budget
 #this id of an agent will be its position in the list
 def make_bidding_agents(agent_classes, cards, budget):
-    agents = []
+    agents = [None]*len(agent_classes)     
     for i in range(len(agent_classes)):
-        agents.append(agent_classes[i](cards, i, len(agent_classes), budget))
+        with time_limit(5, i, "__init__"):
+            agents[i] = agent_classes[i](cards, i, len(agent_classes), budget)
     return agents
 
 
@@ -70,12 +89,15 @@ def generate_cards(num, round_number):
 #does a round of bids
 #
 #params: the round number, the card being bid on
-def get_bids(card, index, agents, budgets, UI):
+def get_bids(card, index, agents, budgets):
     UI.on_auction_started(card)
     bids = [];
     
     for i in range(len(agents)):
-        bid = agents[i].getBid(card, index)
+        bid = 0
+        if agents[i]:
+            with time_limit(.1,i, "getBid"):
+                bid = agents[i].getBid(card, index)
         
         if type(bid) != int:
             bid = 0
@@ -92,7 +114,7 @@ def get_bids(card, index, agents, budgets, UI):
 
 #gives out the results of a round of bids
 #bids is a list of tuples, (id, bid)
-def give_results(bids, agents, card, budgets, UI):
+def give_results(bids, agents, card, budgets):
     bids = sorted(bids, key = lambda x: x[1], reverse = True)
     winner = bids[0][0]
     price = bids[1][1]
@@ -103,11 +125,14 @@ def give_results(bids, agents, card, budgets, UI):
     #sort by agent
     bids = sorted(bids, key = lambda x: x[0])
     formatted_bids = [x[1] for x in bids]
-    for agent in agents:
-        agent.seeResults(card, winner, price, formatted_bids)
+    for i in range(len(agents)):
+        if agents[i]:
+            with time_limit(.1, i, "seeResults"):
+                agents[i].seeResults(card, winner, price, formatted_bids)
     
     UI.on_auction_finished(card, winner, price)
     return winner
+
 
 
 #caculates everyones score
@@ -115,7 +140,7 @@ def give_results(bids, agents, card, budgets, UI):
 #return list of scores
 #
 #may need to reorganize this to work with vizualizations
-def calculate_scores(cards_won, num_agents, UI):
+def calculate_scores(cards_won, num_agents):
     #total each players scores
     score = [0]*num_agents
     totals = []
@@ -163,12 +188,16 @@ def calculate_scores(cards_won, num_agents, UI):
             
             
 def main():
-    #build UI
+    #set signal handler so we can use SIGALRM to enforce time limits
+    signal.signal(signal.SIGALRM, signal_handler)
+    
+    #build UI. It is global because I got sick of passing it into every function
+    global UI
     UI = user_interface.UserInterface()
     
     #set up game
     agent_classes = get_agent_classes()
-    UI.on_agents_discovered([x.__name__ for x in agent_classes])
+    UI.on_game_started([x.__name__ for x in agent_classes])
     num_agents = len(agent_classes)
     
     for rnd in range(NUM_ROUNDS):
@@ -183,8 +212,9 @@ def main():
         
         #do bidding
         for i in range(len(cards)):
-            bids = get_bids(cards[i], i, agents, budgets, UI)
-            winner = give_results(bids, agents, cards[i], budgets, UI)
+            bids = get_bids(cards[i], i, agents, budgets)
+            winner = give_results(bids, agents, cards[i], budgets)
+            
             if winner in cards_won:
                 cards_won[winner].append(cards[i])
             else:
@@ -192,7 +222,7 @@ def main():
         
         
         #do scoring
-        calculate_scores(cards_won, num_agents, UI)
+        calculate_scores(cards_won, num_agents)
     
     UI.on_game_finished()
     

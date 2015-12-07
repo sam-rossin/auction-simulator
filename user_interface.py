@@ -17,7 +17,7 @@ class UserInterface:
     #agents will always be referred to by ID after this, so we
     #can use this list for reference if we need names.
     #note that this only passes strings, as we should never need to access actual agent objects from the UI
-    def on_agents_discovered(self, agents):
+    def on_game_started(self, agents):
         self.agents = agents
         self.winners = [0]*len(agents)
         
@@ -84,6 +84,14 @@ class UserInterface:
         print(self.agents)
         
         
+    #called when a function runs for too long.
+    #the parameter function can be "getBid", "seeResults", and "__init__"
+    #note that the consequences for the offending player for they offenses are:
+    #   "getBid" -- they bid 0
+    #   "seeResults" -- no consequences: they just miss out on information potentially
+    #   "__init__" -- disqualified for the round (they bid 0 for whole round)
+    def on_function_timed_out(self, agent_id, function):
+        print(self.agents[agent_id], "timed out on function", function)
 
 
 
